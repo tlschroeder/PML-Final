@@ -26,8 +26,6 @@ train = train[,cutcol$nzv == FALSE]
 test = test[,cutcol$nzv == FALSE]
 train$X = NULL
 test$X = NULL
-test$user_name = NULL
-train$user_name = NULL
 ```
 However, this still leaves us with a number of NAs in our data, which is problematic for many analyses. Examination of the dataset reveals that NAs are heavily clustered in a few columns and can be safely removed:
 
