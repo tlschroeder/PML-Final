@@ -56,6 +56,8 @@ confusionMatrix(crosspred, crossval$classe)
 
 Our accuracy is above 99%, which is very good! Note specifically that this is a cross validation test and not merely application to the existing data, so we also anticipate an out-of-sample error rate of less than 1%. Since our cross validation has yielded such positive results, we will use a random forest to generate our final outcome using the full training set and apply it to the test set. Initial attempts produced errors relating to predictors not matching; these are addressed by quickly cleaning up factor levels before creating the full forest.
 
+All that's left is to run our analysis:
+
 ```{r}
 common = intersect(names(train), names(test)) 
 for (p in common) { 
@@ -69,3 +71,5 @@ finalForest = randomForest(classe ~ ., data=train, method="class")
 test$problem_id = as.factor(test$problem_id)
 predict(forest, newdata = test, type = "class")
 ```
+
+...Which produces a tidy list of our predictions for this assignment.
