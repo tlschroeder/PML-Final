@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en-us">
+  <head>
+    <meta charset="UTF-8">
+    <title>Pml-final by tlschroeder</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="stylesheet" type="text/css" href="stylesheets/normalize.css" media="screen">
+    <link href='https://fonts.googleapis.com/css?family=Open+Sans:400,700' rel='stylesheet' type='text/css'>
+    <link rel="stylesheet" type="text/css" href="stylesheets/stylesheet.css" media="screen">
+    <link rel="stylesheet" type="text/css" href="stylesheets/github-light.css" media="screen">
+  </head>
+  <body>
+    <section class="page-header">
+      <h1 class="project-name">Pml-final</h1>
+      <h2 class="project-tagline"></h2>
+      <a href="https://github.com/tlschroeder/PML-Final" class="btn">View on GitHub</a>
+      <a href="https://github.com/tlschroeder/PML-Final/zipball/master" class="btn">Download .zip</a>
+      <a href="https://github.com/tlschroeder/PML-Final/tarball/master" class="btn">Download .tar.gz</a>
+    </section>
+
+    <section class="main-content">
+      <hr>
+
+<p>title: "Practical Machine Learning Final"</p>
+
+<h2>
+<a id="output-html_document" class="anchor" href="#output-html_document" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>output: html_document</h2>
+
+<div class="highlight highlight-source-r"><pre><span class="pl-e">knitr</span><span class="pl-k">::</span><span class="pl-smi">opts_chunk</span><span class="pl-k">$</span>set(<span class="pl-v">echo</span> <span class="pl-k">=</span> <span class="pl-c1">TRUE</span>)</pre></div>
+
+<h2>
+<a id="introduction" class="anchor" href="#introduction" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>Introduction</h2>
+
+<p>In the course of this assignment, we will use R to create a machine learning algorithm designed to take input from a series of accelerometers and determine in which of 5 ways a lifting exercise is being performed. First, we must load the data into R and examine its basic features:</p>
+
+<div class="highlight highlight-source-r"><pre>library(<span class="pl-smi">caret</span>)
+<span class="pl-v">test</span> <span class="pl-k">=</span> read.csv(<span class="pl-s"><span class="pl-pds">"</span>pml-testing.csv<span class="pl-pds">"</span></span>)
+<span class="pl-v">train</span> <span class="pl-k">=</span> read.csv(<span class="pl-s"><span class="pl-pds">"</span>pml-training.csv<span class="pl-pds">"</span></span>)
+ncol(<span class="pl-smi">train</span>)
+nrow(<span class="pl-smi">train</span>)
+nrow(<span class="pl-smi">test</span>)</pre></div>
+
+<p>As expected, our training set is significantly larger than our test set. While it was omitted in the above code for readability purposes, we also call head() on our dataset to take a quick look at the variables. To improve our accuracy, we will remove those with insignificant variance. We will also remove the column X, as it is merely an index and contains no usable information. While we're at it, we'll create a version of the test set with the target variable removed:</p>
+
+<div class="highlight highlight-source-r"><pre><span class="pl-v">cutcol</span> <span class="pl-k">=</span> nearZeroVar(<span class="pl-smi">train</span>, <span class="pl-v">saveMetrics</span> <span class="pl-k">=</span> <span class="pl-c1">TRUE</span>)
+<span class="pl-v">train</span> <span class="pl-k">=</span> <span class="pl-smi">train</span>[,<span class="pl-smi">cutcol</span><span class="pl-k">$</span><span class="pl-smi">nzv</span> <span class="pl-k">==</span> <span class="pl-c1">FALSE</span>]
+<span class="pl-v">test</span> <span class="pl-k">=</span> <span class="pl-smi">test</span>[,<span class="pl-smi">cutcol</span><span class="pl-k">$</span><span class="pl-smi">nzv</span> <span class="pl-k">==</span> <span class="pl-c1">FALSE</span>]
+<span class="pl-smi">train</span><span class="pl-k">$</span><span class="pl-v">X</span> <span class="pl-k">=</span> <span class="pl-c1">NULL</span>
+<span class="pl-smi">test</span><span class="pl-k">$</span><span class="pl-v">X</span> <span class="pl-k">=</span> <span class="pl-c1">NULL</span>
+<span class="pl-smi">test</span><span class="pl-k">$</span><span class="pl-v">user_name</span> <span class="pl-k">=</span> <span class="pl-c1">NULL</span>
+<span class="pl-smi">train</span><span class="pl-k">$</span><span class="pl-v">user_name</span> <span class="pl-k">=</span> <span class="pl-c1">NULL</span></pre></div>
+
+<p>However, this still leaves us with a number of NAs in our data, which is problematic for many analyses. Examination of the dataset reveals that NAs are heavily clustered in a few columns and can be safely removed:</p>
+
+<div class="highlight highlight-source-r"><pre><span class="pl-v">train</span> <span class="pl-k">=</span> <span class="pl-smi">train</span>[,colMeans(is.na(<span class="pl-smi">train</span>)) <span class="pl-k">==</span> <span class="pl-c1">0</span>]
+<span class="pl-v">test</span> <span class="pl-k">=</span> <span class="pl-smi">test</span>[,colMeans(is.na(<span class="pl-smi">test</span>)) <span class="pl-k">==</span> <span class="pl-c1">0</span>]</pre></div>
+
+<p>In order to avoid overfitting to the test set, we will set up cross validation using a 70-30 split of our training set:</p>
+
+<div class="highlight highlight-source-r"><pre><span class="pl-v">set.seed</span> <span class="pl-k">=</span> <span class="pl-c1">1</span>
+<span class="pl-v">split</span> <span class="pl-k">=</span> createDataPartition(<span class="pl-smi">train</span><span class="pl-k">$</span><span class="pl-smi">classe</span>, <span class="pl-v">p</span> <span class="pl-k">=</span> <span class="pl-c1">0.7</span>, <span class="pl-v">list</span> <span class="pl-k">=</span> <span class="pl-c1">FALSE</span>)
+<span class="pl-v">crosstrain</span> <span class="pl-k">=</span> <span class="pl-smi">train</span>[<span class="pl-smi">split</span>,]
+<span class="pl-v">crossval</span> <span class="pl-k">=</span> <span class="pl-smi">train</span>[<span class="pl-k">-</span><span class="pl-smi">split</span>,]</pre></div>
+
+<p>Finally, we can begin to construct our model. For this assignment, we will be using a random forest to interpret the data. We use the training portion of our partitioned dataset, check the results using the cross validation portion, and examine the accuracy using confusionMatrix:</p>
+
+<div class="highlight highlight-source-r"><pre>library(<span class="pl-smi">randomForest</span>)
+library(<span class="pl-smi">rpart</span>)
+<span class="pl-v">forest</span> <span class="pl-k">=</span> randomForest(<span class="pl-smi">classe</span> <span class="pl-k">~</span> ., <span class="pl-v">data</span><span class="pl-k">=</span><span class="pl-smi">crosstrain</span>, <span class="pl-v">method</span><span class="pl-k">=</span><span class="pl-s"><span class="pl-pds">"</span>class<span class="pl-pds">"</span></span>)
+<span class="pl-v">crosspred</span> <span class="pl-k">=</span> predict(<span class="pl-smi">forest</span>, <span class="pl-smi">crossval</span>, <span class="pl-v">type</span> <span class="pl-k">=</span> <span class="pl-s"><span class="pl-pds">"</span>class<span class="pl-pds">"</span></span>)
+confusionMatrix(<span class="pl-smi">crosspred</span>, <span class="pl-smi">crossval</span><span class="pl-k">$</span><span class="pl-smi">classe</span>)</pre></div>
+
+<p>Our accuracy is above 99%, which is very good! Note specifically that this is a cross validation test and not merely application to the existing data, so we also anticipate an out-of-sample error rate of less than 1%. Since our cross validation has yielded such positive results, we will use a random forest to generate our final outcome using the full training set and apply it to the test set. Initial attempts produced errors relating to predictors not matching; these are addressed by quickly cleaning up factor levels before creating the full forest.</p>
+
+<p>All that's left is to run our analysis:</p>
+
+<div class="highlight highlight-source-r"><pre><span class="pl-v">common</span> <span class="pl-k">=</span> intersect(names(<span class="pl-smi">train</span>), names(<span class="pl-smi">test</span>)) 
+<span class="pl-k">for</span> (<span class="pl-smi">p</span> <span class="pl-k">in</span> <span class="pl-smi">common</span>) { 
+  <span class="pl-k">if</span> (class(<span class="pl-smi">train</span>[[<span class="pl-smi">p</span>]]) <span class="pl-k">==</span> <span class="pl-s"><span class="pl-pds">"</span>factor<span class="pl-pds">"</span></span>) { 
+    levels(<span class="pl-smi">test</span>[[<span class="pl-smi">p</span>]]) <span class="pl-k">=</span> levels(<span class="pl-smi">train</span>[[<span class="pl-smi">p</span>]]) 
+  } 
+}
+
+
+<span class="pl-v">finalForest</span> <span class="pl-k">=</span> randomForest(<span class="pl-smi">classe</span> <span class="pl-k">~</span> ., <span class="pl-v">data</span><span class="pl-k">=</span><span class="pl-smi">train</span>, <span class="pl-v">method</span><span class="pl-k">=</span><span class="pl-s"><span class="pl-pds">"</span>class<span class="pl-pds">"</span></span>)
+<span class="pl-smi">test</span><span class="pl-k">$</span><span class="pl-v">problem_id</span> <span class="pl-k">=</span> as.factor(<span class="pl-smi">test</span><span class="pl-k">$</span><span class="pl-smi">problem_id</span>)
+predict(<span class="pl-smi">forest</span>, <span class="pl-v">newdata</span> <span class="pl-k">=</span> <span class="pl-smi">test</span>, <span class="pl-v">type</span> <span class="pl-k">=</span> <span class="pl-s"><span class="pl-pds">"</span>class<span class="pl-pds">"</span></span>)</pre></div>
+
+<p>...Which produces a tidy list of our predictions for this assignment.</p>
+
+      <footer class="site-footer">
+        <span class="site-footer-owner"><a href="https://github.com/tlschroeder/PML-Final">Pml-final</a> is maintained by <a href="https://github.com/tlschroeder">tlschroeder</a>.</span>
+
+        <span class="site-footer-credits">This page was generated by <a href="https://pages.github.com">GitHub Pages</a> using the <a href="https://github.com/jasonlong/cayman-theme">Cayman theme</a> by <a href="https://twitter.com/jasonlong">Jason Long</a>.</span>
+      </footer>
+
+    </section>
+
+  
+  </body>
+</html>
