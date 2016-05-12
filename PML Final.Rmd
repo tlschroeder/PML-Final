@@ -1,0 +1,71 @@
+---
+title: "Practical Machine Learning Final"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Introduction
+In the course of this assignment, we will use R to create a machine learning algorithm designed to take input from a series of accelerometers and determine in which of 5 ways a lifting exercise is being performed. First, we must load the data into R and examine its basic features:
+```{r}
+library(caret)
+test = read.csv("pml-testing.csv")
+train = read.csv("pml-training.csv")
+ncol(train)
+nrow(train)
+nrow(test)
+```
+
+As expected, our training set is significantly larger than our test set. While it was omitted in the above code for readability purposes, we also call head() on our dataset to take a quick look at the variables. To improve our accuracy, we will remove those with insignificant variance. We will also remove the column X, as it is merely an index and contains no usable information. While we're at it, we'll create a version of the test set with the target variable removed:
+
+```{r}
+cutcol = nearZeroVar(train, saveMetrics = TRUE)
+train = train[,cutcol$nzv == FALSE]
+test = test[,cutcol$nzv == FALSE]
+train$X = NULL
+test$X = NULL
+test$user_name = NULL
+train$user_name = NULL
+```
+However, this still leaves us with a number of NAs in our data, which is problematic for many analyses. Examination of the dataset reveals that NAs are heavily clustered in a few columns and can be safely removed:
+
+```{r}
+train = train[,colMeans(is.na(train)) == 0]
+test = test[,colMeans(is.na(test)) == 0]
+```
+
+
+In order to avoid overfitting to the test set, we will set up cross validation using a 70-30 split of our training set:
+```{r}
+set.seed = 1
+split = createDataPartition(train$classe, p = 0.7, list = FALSE)
+crosstrain = train[split,]
+crossval = train[-split,]
+```
+
+Finally, we can begin to construct our model. For this assignment, we will be using a random forest to interpret the data. We use the training portion of our partitioned dataset, check the results using the cross validation portion, and examine the accuracy using confusionMatrix:
+```{r}
+library(randomForest)
+library(rpart)
+forest = randomForest(classe ~ ., data=crosstrain, method="class")
+crosspred = predict(forest, crossval, type = "class")
+confusionMatrix(crosspred, crossval$classe)
+```
+
+Our accuracy is above 99%, which is very good! Note specifically that this is a cross validation test and not merely application to the existing data, so we also anticipate an out-of-sample error rate of less than 1%. Since our cross validation has yielded such positive results, we will use a random forest to generate our final outcome using the full training set and apply it to the test set. Initial attempts produced errors relating to predictors not matching; these are addressed by quickly cleaning up factor levels before creating the full forest.
+
+```{r}
+common = intersect(names(train), names(test)) 
+for (p in common) { 
+  if (class(train[[p]]) == "factor") { 
+    levels(test[[p]]) = levels(train[[p]]) 
+  } 
+}
+
+
+finalForest = randomForest(classe ~ ., data=train, method="class")
+test$problem_id = as.factor(test$problem_id)
+predict(forest, newdata = test, type = "class")
+```
